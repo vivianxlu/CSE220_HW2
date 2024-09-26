@@ -23,12 +23,12 @@ void print_packet(unsigned int packet[])
     printf("Requester ID: %u\n", (packet[1] >> 16) & 0xFFFF);
     printf("Tag: %u\n", (packet[1] >> 8) & 0xFF);
     printf("Last BE: %u\n", (packet[1] >> 4) & 0xF);
-    printf("First BE: %u\n", packet[1] & 0xF);
+    printf("1st BE: %u\n", packet[1] & 0xF);
     
     if (((packet[0] >> 30) & 0x3) == 1) {
         printf("Data: ");
         for (unsigned int i = 3; i < (packet[0] & 0x3FF) + 3; i++) {
-            printf("%u", packet[i] & 0xFFFFFFFF);
+            printf("%d", packet[i] & 0xFFFFFFFF);
             if (i < (packet[0] & 0x3FF) + 2) {
                 printf(" ");
             }
