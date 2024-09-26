@@ -28,14 +28,11 @@ void print_packet(unsigned int packet[])
     if (((packet[0] >> 30) & 0x3) == 1) {
         printf("Data: ");
         for (unsigned int i = 3; i < (packet[0] & 0x3FF) + 3; i++) {
-            printf("%d", packet[i] & 0xFFFFFFFF);
-            if (i < (packet[0] & 0x3FF) + 2) {
-                printf(" ");
-            }
+            printf("%d ", packet[i] & 0xFFFFFFFF);
         }
         printf("\n");
     } else {
-        printf("Data:\n");
+        printf("Data: \n");
     }
 }
 
