@@ -41,7 +41,7 @@ void store_values(unsigned int packets[], char *memory)
     int packetStart = 0;
     int payloadIndex = packetStart + 3;
     // 
-    while (true) {
+    // while (true) {
         
         // Extract address and length
         unsigned int address = packets[packetStart + 2] & 0xFFFFFFFF;
@@ -79,13 +79,13 @@ void store_values(unsigned int packets[], char *memory)
                             printf("True\n");
                             printf("Payload Value, shifted to the right and masked: %d (Hex: %X)\n", (packets[payloadIndex] >> (j * 8)) & 0xFF, (packets[payloadIndex] >> (j * 8)) & 0xFF);
                             int byte_value = (packets[payloadIndex] >> (j * 8)) & 0xFF;
-                            printf("Final byte value: %d\n", byte_value);
-                            printf("Writing to memory address %u...\n", address);
+                            printf("byte_value: %d\n", byte_value);
+                            printf("Writing to memory address:  %u\n", address);
                             memory[address] = byte_value;
                             printf("Value stored in memory: %d (Hex: %X)\n", memory[address], memory[address]);
                             address++;
                         } else {
-                            printf("Writing to memory address %u...\n", address);
+                            printf("Writing to memory address: %u\n", address);
                             memory[address] = 0x00;
                             printf("Value in memory address: %d (Hex: %X)\n", memory[address], memory[address]);
                             address++;
@@ -93,34 +93,33 @@ void store_values(unsigned int packets[], char *memory)
                     }
                     payloadIndex++;
                     printf("Payload index: %d\n", payloadIndex);
-                    return;
-                // } else if (i == length - 1) {
-                //     for (int j = 0; j < 4; j++) {
-                //         if (last_be & (1 << j)) {
-                //             memory[address] = (int)(packets[payloadIndex] >> (j * 8)) & 0xFF;
-                //             address++;
-                //         } else {
-                //             memory[address] = 0x00;
-                //             address++;
-                //         }
-                //     }
-                //     payloadIndex++;
-                // } else {
-                //     for (int j = 0; j < 4; j++) {
-                //         int byte_value = (packets[payloadIndex] >> (j * 8) & 0xFF);
-                //         printf("Byte value: %d (Hex: %X)\n", byte_value, byte_value);
-                //         memory[address] = byte_value;
-                //         printf("Value in memory address: %d (Hex: %X)\n", memory[address], memory[address]);
-                //         address++;
-                //         printf("Address: %u", address);
-                //     }
-                //     payloadIndex++;
-                //     printf("Payload Index: %d\n", payloadIndex);
+                } else if (i == length - 1) {
+                    for (int j = 0; j < 4; j++) {
+                        if (last_be & (1 << j)) {
+                            memory[address] = (int)(packets[payloadIndex] >> (j * 8)) & 0xFF;
+                            address++;
+                        } else {
+                            memory[address] = 0x00;
+                            address++;
+                        }
+                    }
+                    payloadIndex++;
+                } else {
+                    for (int j = 0; j < 4; j++) {
+                        int byte_value = (packets[payloadIndex] >> (j * 8) & 0xFF);
+                        printf("Byte value: %d (Hex: %X)\n", byte_value, byte_value);
+                        memory[address] = byte_value;
+                        printf("Value in memory address: %d (Hex: %X)\n", memory[address], memory[address]);
+                        address++;
+                        printf("Address: %u", address);
+                    }
+                    payloadIndex++;
+                    printf("Payload Index: %d\n", payloadIndex);
                 }
             }   
         }
         
-    }
+    //}
 
 }
 
