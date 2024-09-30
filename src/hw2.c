@@ -75,7 +75,7 @@ void store_values(unsigned int packets[], char *memory)
                 printf("--------- Start Iteration through PAYLOAD --------\n");
                 printf("Payload Index: %d || Payload Value: %d (Hex: %X)\n", payloadIndex, packets[payloadIndex], packets[payloadIndex]);
                 // Iterate through every data payload
-                for (int i = 0; i < length; i++) {
+                for (unsigned int i = 0; i < length; i++) {
                     if (i == 0) {
                         for (int j = 0; j < 4; j++) {
                             printf("Value of bit %d in the FIRST_BE is: %d\n", j, first_be & (1 << j));
@@ -85,12 +85,12 @@ void store_values(unsigned int packets[], char *memory)
                                 printf("BYTE_VALUE: %d\n", byte_value);
                                 printf("Writing to memory address: %u\n", address);
                                 memory[address] = byte_value;
-                                printf("MEMORY[ADDRESS]: Hex %X\n", memory[address], memory[address]);
+                                printf("MEMORY[ADDRESS]: Hex %X\n", memory[address]);
                                 address++;
                             } else {
                                 printf("Writing to memory address: %u\n", address);
                                 memory[address] = 0x00;
-                                printf("MEMORY[ADDRESS]: Hex %X)\n", memory[address], memory[address]);
+                                printf("MEMORY[ADDRESS]: Hex %X)\n", memory[address]);
                                 address++;
                             }
                         }
