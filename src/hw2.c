@@ -88,8 +88,6 @@ void store_values(unsigned int packets[], char *memory)
                                 printf("MEMORY[ADDRESS]: Hex %X\n", memory[address]);
                                 address++;
                             } else {
-                                printf("Writing to memory address: %u\n", address);
-                                memory[address] = 0x00;
                                 printf("MEMORY[ADDRESS]: Hex %X)\n", memory[address]);
                                 address++;
                             }
@@ -103,7 +101,6 @@ void store_values(unsigned int packets[], char *memory)
                                 memory[address] = byte_value;
                                 address++;
                             } else {
-                                memory[address] = 0x00;
                                 address++;
                             }
                         }
