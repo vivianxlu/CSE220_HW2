@@ -16,7 +16,6 @@ void print_packet(unsigned int packet[])
     int last_be = (packet[1] >> 4) & 0xF;
     int first_be = (packet[1]) & 0xF;
     */
-
     printf("Packet Type: %s\n", ((packet[0] >> 30) & 0x3) == 1 ? "Write" : "Read");
     printf("Address: %u\n", packet[2] & 0xFFFFFFFF);
     printf("Length: %u\n", packet[0] & 0x3FF);
@@ -36,8 +35,7 @@ void print_packet(unsigned int packet[])
     }
 }
 
-void store_values(unsigned int packets[], char *memory)
-{
+void store_values(unsigned int packets[], char *memory) {
     int packetStart = 0;
     int payloadIndex = packetStart + 3;
 
@@ -48,52 +46,32 @@ void store_values(unsigned int packets[], char *memory)
             // Extract address and length
             unsigned int address = packets[packetStart + 2] & 0xFFFFFFFF;
             unsigned int length = packets[packetStart] & 0x3FF;
-
             // Extract byte enable values
             unsigned int last_be = (packets[packetStart + 1] >> 4) & 0xF;
             unsigned int first_be = packets[packetStart + 1] & 0xF;
-            printf("Address: %u, Length: %u, Last BE: %u, First BE: %u ----------\n", address, length, last_be, first_be);
 
             // Check if the address is greater than 1MB
             if (address > 0x100000) {
-                printf("Address Size is above 1MB\n");
                 // Update packetStart to move to the next packet
-                printf("Previous value of packetStart: %d\n", packetStart);
                 packetStart += 4 + length;
-                printf("Current value of packetStart: %d\n", packetStart);
-                
                 // Update packetsIndex to reflect the new packetStart
-                printf("Previous value of packetsIndex: %d\n", payloadIndex);
                 payloadIndex = packetStart + 3;
-                printf("Current value of packetsIndex: %d\n", payloadIndex);
-
             } 
             // If the address is not greater than 1MB, handle the packet accordingly
             else {
-                printf("Packet type: Hex %X\n", packets[packetStart]);
-                printf("PacketStart: %d\n", packetStart);
-                printf("--------- Start Iteration through PAYLOAD --------\n");
-                printf("Payload Index: %d || Payload Value: %d (Hex: %X)\n", payloadIndex, packets[payloadIndex], packets[payloadIndex]);
                 // Iterate through every data payload
                 for (unsigned int i = 0; i < length; i++) {
                     if (i == 0) {
                         for (int j = 0; j < 4; j++) {
-                            printf("Value of bit %d in the FIRST_BE is: %d\n", j, first_be & (1 << j));
                             if (first_be & (1 << j)) {
-                                printf("Bit Manipulated Payload Value: %d (Hex: %X)\n", (packets[payloadIndex] >> (j * 8)) & 0xFF, (packets[payloadIndex] >> (j * 8)) & 0xFF);
                                 unsigned int byte_value = (packets[payloadIndex] >> (j * 8)) & 0xFF;
-                                printf("BYTE_VALUE: %d\n", byte_value);
-                                printf("Writing to memory address: %u\n", address);
                                 memory[address] = byte_value;
-                                printf("MEMORY[ADDRESS]: Hex %X\n", memory[address]);
                                 address++;
                             } else {
-                                printf("MEMORY[ADDRESS]: Hex %X)\n", memory[address]);
                                 address++;
                             }
                         }
                         payloadIndex++;
-                        printf("Payload index: %d\n", payloadIndex);
                     } else if (i == length - 1) {
                         for (int j = 0; j < 4; j++) {
                             if (last_be & (1 << j)) {
@@ -105,7 +83,6 @@ void store_values(unsigned int packets[], char *memory)
                             }
                         }
                         payloadIndex++;
-                        printf("PAYLOADINDEX after storing the last byte: %d\n", payloadIndex);
                     } else {
                         for (int j = 0; j < 4; j++) {
                             int byte_value = (packets[payloadIndex] >> (j * 8) & 0xFF);
@@ -113,14 +90,11 @@ void store_values(unsigned int packets[], char *memory)
                             address++;
                         }
                         payloadIndex++;
-                        printf("Payload Index: %d\n", payloadIndex);
                     }
                 } 
                 
                 packetStart += 3 + length;
                 payloadIndex = packetStart + 3;
-                printf("End loop\n");
-                printf("New PacketStart: %d, New PayloadIndex: %d\n", packetStart, payloadIndex);
             }
         }
     }
@@ -129,48 +103,66 @@ void store_values(unsigned int packets[], char *memory)
 
 unsigned int* create_completion(unsigned int packets[], const char *memory)
 {
-    (void)packets;
-    (void)memory;
-
     /* Extract information from packets[] */
-    unsigned int r_type = (packets[0] >> 10 & 0x3FFFFF);
-    unsigned int r_address = (packets[1] >> 2) & 0x3FFFFF;
-    unsigned int r_length = packets[0] & 0x1FF;
+    // unsigned int r_type = (packets[0] >> 10 & 0x3FFFFF);
+    unsigned int r_address = packets[2] & 0xfffffffc;
+    unsigned int r_length = packets[0] & 0x3FF;
     unsigned int requester_id = (packets[1] >> 16) & 0xFFFF;
     unsigned int tag = (packets[1] >> 8) & 0xFF;
     unsigned int last_be = (packets[1] >> 4) & 0xF;
     unsigned int first_be = packets[1] & 0xF;
-    
-    unsigned int completer_id = 220;
 
-    /* Create an array for Completion packets (Initialize with the size of first packet) */
-    unsigned int *completions = NULL;
-    completions = malloc((3 + r_length) * sizeof(unsigned int));
-
-    /* Check which BE are turned off */
-    unsigned int first_be_off = 0;
-    unsigned int last_be_off = 0;
+    /* Check the number of disabled bytes, so I can have a proper ByteCount */
+    int disabled_bytes = 0;
     for (int i = 0; i < 4; i++) {
         if (!(first_be & (1 << i))) {
-            first_be_off++;
+            disabled_bytes++;
         }
         if (!(last_be & (1 << i))) {
-            last_be_off++;
+            disabled_bytes++;
         }
     }
+
+    /* Create an array for Completion packets (Initialize with the size of first packet) */
+    unsigned int *completions = malloc((3 + r_length) * sizeof(unsigned int));
 
     /* Generate variables for use in Completion packets */
     unsigned int c_length = r_length;
-    unsigned int byte_count = (r_length * 4) - first_be_off - last_be_off;
+    unsigned int byte_count = (r_length * 4) - disabled_bytes;
     unsigned int lower_address = r_address & 0x7F;
 
-    /* Extract memory data... T-T */
-    for (int i = r_address + r_length - 1; i >= r_address; i--) {
-        unsigned int mem_data = memory[i];
-        /* Add this data to the completion packet */
-        completions[3] = mem_data;
-    }
+    int c_start = 0;
+    int c_data_start = c_start + 3;
 
+        completions[0] = 0;
+        completions[1] = 0;
+        completions[2] = 0;
+        /* Make one completion packet */
+        completions[c_start] |= 0x4A << 24; /* Type */
+        completions[c_start] |= (r_length); /* Length */
+        completions[c_start + 2] |= (requester_id) << 16; /* Requestor ID */
+        completions[c_start + 1] |= 0xdc << 16; /* Completer ID */
+        completions[c_start + 2] |= (tag) << 8; /* Tag */
+        completions[c_start + 1] |= (r_length * 4); /* Byte Count*/
+        completions[c_start + 2] |= lower_address; /* Lower Address */
 
-	return NULL;
+        /* ----- Extract data from memory ----- */
+        unsigned int mem_address = r_address;
+        /* For-Loop || Loop through the Length */
+        for (int i = 0; i < r_length; i++) {
+            /* 4 Times per Length */
+            completions[c_data_start] = 0;
+            printf("%d:\n", i);
+            for (int j = 0; j < 4; j++) {
+                /* Assign the initial address to the memory address */
+                completions[c_data_start] |=  ((unsigned char) memory[mem_address]) << (j * 8);
+                printf("value: %d\n", memory[mem_address]);
+                mem_address++;
+                
+                printf("payload: %x\n", completions[c_data_start]);
+            }
+            c_data_start++;
+        }
+        
+	return completions;
 }
