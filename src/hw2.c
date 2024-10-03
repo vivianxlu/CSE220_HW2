@@ -101,8 +101,21 @@ void store_values(unsigned int packets[], char *memory) {
         
 }
 
-unsigned int* create_completion(unsigned int packets[], const char *memory)
-{
+unsigned int* create_completion(unsigned int packets[], const char *memory) {   
+
+    // int totalElements = 0;
+    // int packetsIterator = 0;
+    // while (true) {
+    //     if (((packets[packetsIterator] >> 10) & 0x3FFFFF) == 0b0100101000000000000000) {
+    //         totalElements += (3 + (packets[packetsIterator] & 0x3FF));
+    //         packetsIterator += 3;
+    //     } else {
+    //         return;
+    //     }  
+    // }
+    int packetStart = 0;
+    int payloadStart = 0;
+    
     /* Extract information from packets[] */
     // unsigned int r_type = (packets[0] >> 10 & 0x3FFFFF);
     unsigned int r_address = packets[2] & 0xfffffffc;
@@ -112,6 +125,10 @@ unsigned int* create_completion(unsigned int packets[], const char *memory)
     unsigned int last_be = (packets[1] >> 4) & 0xF;
     unsigned int first_be = packets[1] & 0xF;
 
+
+    /* Create an array for Completion packets */
+    unsigned int * completions = malloc((3 + r_length) * sizeof(unsigned int));
+    
     /* Check the number of disabled bytes, so I can have a proper ByteCount */
     int disabled_bytes = 0;
     for (int i = 0; i < 4; i++) {
@@ -123,9 +140,6 @@ unsigned int* create_completion(unsigned int packets[], const char *memory)
         }
     }
 
-    /* Create an array for Completion packets (Initialize with the size of first packet) */
-    unsigned int *completions = malloc((3 + r_length) * sizeof(unsigned int));
-
     /* Generate variables for use in Completion packets */
     unsigned int c_length = r_length;
     unsigned int byte_count = (r_length * 4) - disabled_bytes;
@@ -134,35 +148,31 @@ unsigned int* create_completion(unsigned int packets[], const char *memory)
     int c_start = 0;
     int c_data_start = c_start + 3;
 
-        completions[0] = 0;
-        completions[1] = 0;
-        completions[2] = 0;
-        /* Make one completion packet */
-        completions[c_start] |= 0x4A << 24; /* Type */
-        completions[c_start] |= (r_length); /* Length */
-        completions[c_start + 2] |= (requester_id) << 16; /* Requestor ID */
-        completions[c_start + 1] |= 0xdc << 16; /* Completer ID */
-        completions[c_start + 2] |= (tag) << 8; /* Tag */
-        completions[c_start + 1] |= (r_length * 4); /* Byte Count*/
-        completions[c_start + 2] |= lower_address; /* Lower Address */
+    completions[0] = 0;
+    completions[1] = 0;
+    completions[2] = 0;
+    /* Make one completion packet */
+    completions[c_start] |= 0x4A << 24; /* Type */
+    completions[c_start] |= (r_length); /* Length */
+    completions[c_start + 2] |= (requester_id) << 16; /* Requestor ID */
+    completions[c_start + 1] |= 0xdc << 16; /* Completer ID */
+    completions[c_start + 2] |= (tag) << 8; /* Tag */
+    completions[c_start + 1] |= (r_length * 4); /* Byte Count*/
+    completions[c_start + 2] |= lower_address; /* Lower Address */
 
-        /* ----- Extract data from memory ----- */
-        unsigned int mem_address = r_address;
-        /* For-Loop || Loop through the Length */
-        for (int i = 0; i < r_length; i++) {
-            /* 4 Times per Length */
-            completions[c_data_start] = 0;
-            printf("%d:\n", i);
-            for (int j = 0; j < 4; j++) {
-                /* Assign the initial address to the memory address */
-                completions[c_data_start] |=  ((unsigned char) memory[mem_address]) << (j * 8);
-                printf("value: %d\n", memory[mem_address]);
-                mem_address++;
-                
-                printf("payload: %x\n", completions[c_data_start]);
-            }
-            c_data_start++;
+    /* ----- Extract data from memory ----- */
+    unsigned int mem_address = r_address;
+    /* For-Loop || Loop through the Length */
+    for (int i = 0; i < r_length; i++) {
+        /* 4 Times per Length */
+        completions[c_data_start] = 0;
+        for (int j = 0; j < 4; j++) {
+            /* Assign the initial address to the memory address */
+            completions[c_data_start] |=  ((unsigned char) memory[mem_address]) << (j * 8);
+            mem_address++;
         }
+        c_data_start++;
+    }
         
 	return completions;
 }
