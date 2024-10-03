@@ -131,5 +131,46 @@ unsigned int* create_completion(unsigned int packets[], const char *memory)
 {
     (void)packets;
     (void)memory;
+
+    /* Extract information from packets[] */
+    unsigned int r_type = (packets[0] >> 10 & 0x3FFFFF);
+    unsigned int r_address = (packets[1] >> 2) & 0x3FFFFF;
+    unsigned int r_length = packets[0] & 0x1FF;
+    unsigned int requester_id = (packets[1] >> 16) & 0xFFFF;
+    unsigned int tag = (packets[1] >> 8) & 0xFF;
+    unsigned int last_be = (packets[1] >> 4) & 0xF;
+    unsigned int first_be = packets[1] & 0xF;
+    
+    unsigned int completer_id = 220;
+
+    /* Create an array for Completion packets (Initialize with the size of first packet) */
+    unsigned int *completions = NULL;
+    completions = malloc((3 + r_length) * sizeof(unsigned int));
+
+    /* Check which BE are turned off */
+    unsigned int first_be_off = 0;
+    unsigned int last_be_off = 0;
+    for (int i = 0; i < 4; i++) {
+        if (!(first_be & (1 << i))) {
+            first_be_off++;
+        }
+        if (!(last_be & (1 << i))) {
+            last_be_off++;
+        }
+    }
+
+    /* Generate variables for use in Completion packets */
+    unsigned int c_length = r_length;
+    unsigned int byte_count = (r_length * 4) - first_be_off - last_be_off;
+    unsigned int lower_address = r_address & 0x7F;
+
+    /* Extract memory data... T-T */
+    for (int i = r_address + r_length - 1; i >= r_address; i--) {
+        unsigned int mem_data = memory[i];
+        /* Add this data to the completion packet */
+        completions[3] = mem_data;
+    }
+
+
 	return NULL;
 }
