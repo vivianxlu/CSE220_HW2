@@ -14,7 +14,7 @@ void print_packet(unsigned int packet[]) {
     printf("Last BE: %u\n", (packet[1] >> 4) & 0xF);
     printf("1st BE: %u\n", packet[1] & 0xF);
     
-    if (((packet[0] >> 30) & 0x3) == 1) { /* Check if the Packet Type = "Write"*/
+    if (((packet[0] >> 30) & 0x3) == 1) {
         printf("Data: ");
         for (unsigned int i = 3; i < (packet[0] & 0x3FF) + 3; i++) {
             printf("%d ", packet[i] & 0xFFFFFFFF);
@@ -33,23 +33,16 @@ void store_values(unsigned int packets[], char *memory) {
         if (((packets[packetStart] >> 10) & 0x3FFFFF) != 0x100000) {
             return;
         } else {
-            // Extract address and length
             unsigned int address = packets[packetStart + 2] & 0xFFFFFFFF;
             unsigned int length = packets[packetStart] & 0x3FF;
-            // Extract byte enable values
+
             unsigned int last_be = (packets[packetStart + 1] >> 4) & 0xF;
             unsigned int first_be = packets[packetStart + 1] & 0xF;
 
-            // Check if the address is greater than 1MB
             if (address > 0x100000) {
-                // Update packetStart to move to the next packet
                 packetStart += 4 + length;
-                // Update packetsIndex to reflect the new packetStart
                 payloadIndex = packetStart + 3;
-            } 
-            // If the address is not greater than 1MB, handle the packet accordingly
-            else {
-                // Iterate through every data payload
+            } else {
                 for (unsigned int i = 0; i < length; i++) {
                     if (i == 0) {
                         for (int j = 0; j < 4; j++) {
@@ -87,8 +80,7 @@ void store_values(unsigned int packets[], char *memory) {
                 payloadIndex = packetStart + 3;
             }
         }
-    }
-        
+    }     
 }
 
 unsigned int* create_completion(unsigned int packets[], const char *memory) {   
@@ -162,7 +154,9 @@ unsigned int* create_completion(unsigned int packets[], const char *memory) {
                 }
                 c_data_idx++;
             }
+            /* --- ASSIGN THE NEW C_START (START OF THE NEXT COMPLETION PACKET) --- */
             c_start = c_data_idx;
+            /* --- GO TO THE NEXT READ PACKET --- */
             r_start += 3;
         }
     }
