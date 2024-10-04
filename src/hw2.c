@@ -6,15 +6,6 @@
 #include "hw2.h"
 
 void print_packet(unsigned int packet[]) {
-    /* 
-    int packet_type = (packet[0] >> 30) & 0x3;
-    unsigned int address = (packet[2]) & 0xFFFFFFFF;
-    int length = (packet[0]) & 0x3FF;
-    int requestor_id = (packet[1] >> 16) & 0xFFFF;
-    int tag = (packet[1] >> 8) & 0xFF;
-    int last_be = (packet[1] >> 4) & 0xF;
-    int first_be = (packet[1]) & 0xF;
-    */
     printf("Packet Type: %s\n", ((packet[0] >> 30) & 0x3) == 1 ? "Write" : "Read");
     printf("Address: %u\n", packet[2] & 0xFFFFFFFF);
     printf("Length: %u\n", packet[0] & 0x3FF);
@@ -101,59 +92,58 @@ void store_values(unsigned int packets[], char *memory) {
 }
 
 unsigned int* create_completion(unsigned int packets[], const char *memory) {   
-    // /* Count the number of int elements */
-    int total_elements = 0;
-    int packets_iterator = 0;
+    /* --- CALCULATE THE AMOUNT OF INT ELEMENTS (THAT I NEED TO ALLOCATE SPACE FOR) ---*/
+    bool crosses_boundary = false;
+    unsigned int packets_iterator = 0;
+    unsigned int total_elements = 0;
 
     while (true) {
         if ((packets[packets_iterator] >> 10) & 0x3FFFFF != 0x0) {
             break;
+        } else {
+            unsigned int packet_address = packets[packets_iterator + 2] & 0xFFFFFFFC;
+            unsigned int packet_length = packets[packets_iterator] & 0x3FF;
+            unsigned int boundary = (0x4000 - (packet_address % 0x4000)) + packet_address;
+            if (packet_address + (packet_length * 4) >= boundary) {
+                total_elements += (6 + packet_length);
+                crosses_boundary = true;
+            } else {
+                total_elements += (3 + packet_length);
+                crosses_boundary = false;
+            }
+            packets_iterator += 3;
         }
-        total_elements += (3 + packets[packets_iterator] & 0x3FF);
-        packets_iterator += 3;
     }
     
-    /* Allocate memory for an array element */
+    /* --- USE `TOTAL_ELEMENTS` TO ALLOCATE THE APPROPRIATE AMOUNT OF SPACE --- */
     unsigned int * completions = malloc(total_elements * sizeof(unsigned int));
     for (int i = 0; i < total_elements; i++) {completions[i] = 0;}
 
-    if (completions == NULL) {
-        fprintf(stderr, "Memory allocation for completions failed.\n");
-        return NULL;
-    }
-
+    /* --- ITERATE THROUGH THE PACKETS IN `PACKETS[]` --- */
     unsigned int r_start = 0;
     unsigned int c_start = 0;
 
     while (true) {
+        /* --- IF THE PACKET IS NOT A READ TLP, BREAK --- */
         if (((packets[r_start] >> 10) & 0x3FFFFF) != 0x0) {
             break;
+        /* --- IF THE PACKET IS A READ TLP, PROCESS --- */
         } else {
-            unsigned int r_address = packets[r_start + 2] & 0xfffffffc;
+            /* --- EXTRACT INFORMATION FROM THE CURRENT PACKET IN QUESTION --- */
+            unsigned int r_address = packets[r_start + 2] & 0xFFFFFFFC;
             unsigned int r_length = packets[r_start] & 0x3FF;
             unsigned int requester_id = (packets[r_start + 1] >> 16) & 0xFFFF;
             unsigned int tag = (packets[r_start + 1] >> 8) & 0xFF;
             unsigned int last_be = (packets[r_start + 1] >> 4) & 0xF;
             unsigned int first_be = packets[r_start +1] & 0xF;
 
-            /* Check the number of disabled bytes, so I can have a proper ByteCount */
-            int disabled_bytes = 0;
-            for (int i = 0; i < 4; i++) {
-                if (!(first_be & (1 << i))) {
-                    disabled_bytes++; 
-                }
-                if (!(last_be & (1 << i))) {
-                    disabled_bytes++;
-                }
-            }
-
             /* Generate variables for use in Completion packets */
             unsigned int c_length = r_length;
-            unsigned int byte_count = (r_length * 4) - disabled_bytes;
+            unsigned int byte_count = (r_length * 4) /* - disabled_bytes */ ;
             unsigned int lower_address = r_address & 0x7F;
             unsigned int c_data_idx = c_start + 3;
 
-            /* Make one completion packet */
+            /* --- MAKE A COMPLETION PACKET --- */
             completions[c_start] |= 0x4A << 24; /* Type */
             completions[c_start] |= (r_length); /* Length */
             completions[c_start + 2] |= (requester_id) << 16; /* Requestor ID */
@@ -162,13 +152,12 @@ unsigned int* create_completion(unsigned int packets[], const char *memory) {
             completions[c_start + 1] |= (r_length * 4); /* Byte Count*/
             completions[c_start + 2] |= lower_address; /* Lower Address */
 
-            /* ----- Extract data from memory ----- */
+            /* --- FOR EACH INT, READ 4 DATA VALUES INTO IT --- */
             unsigned int mem_address = r_address;
-
             for (int i = 0; i < r_length; i++) {
                 completions[c_data_idx] = 0;
                 for (int j = 0; j < 4; j++) {
-                    completions[c_data_idx] |=  ((unsigned char) memory[mem_address]) << (j * 8);
+                    completions[c_data_idx] |= ((unsigned char) memory[mem_address]) << (j * 8);
                     mem_address++;;
                 }
                 c_data_idx++;
