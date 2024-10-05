@@ -20,7 +20,9 @@ void print_packet(unsigned int packet[]) {
             printf("%d ", packet[i] & 0xFFFFFFFF);
         }
         printf("\n");
-    } else { printf("Data: \n"); }
+    } else {
+        printf("Data: \n");
+    }
 }
 
 void store_values(unsigned int packets[], char *memory) {
@@ -29,7 +31,7 @@ void store_values(unsigned int packets[], char *memory) {
 
     while (true) {
         if (((packets[packetStart] >> 10) & 0x3FFFFF) != 0x100000) {
-            return;
+            break;
         } else {
             unsigned int address = packets[packetStart + 2] & 0xFFFFFFFF;
             unsigned int length = packets[packetStart] & 0x3FF;
@@ -48,7 +50,9 @@ void store_values(unsigned int packets[], char *memory) {
                                 unsigned int byte_value = (packets[payloadIndex] >> (j * 8)) & 0xFF;
                                 memory[address] = byte_value;
                                 address++;
-                            } else { address++; }
+                            } else {
+                                address++;
+                            }
                         }
                         payloadIndex++;
                     } else if (i == length - 1) {
@@ -57,7 +61,9 @@ void store_values(unsigned int packets[], char *memory) {
                                 unsigned int byte_value = (packets[payloadIndex] >> (j * 8)) & 0xFF;
                                 memory[address] = byte_value;
                                 address++;
-                            } else { address++; }
+                            } else {
+                                address++;
+                            }
                         }
                         payloadIndex++;
                     } else {
@@ -78,103 +84,104 @@ void store_values(unsigned int packets[], char *memory) {
 
 unsigned int *create_completion(unsigned int packets[], const char *memory) {
     /* --- CALCULATE THE AMOUNT OF INT ELEMENTS (THAT I NEED TO ALLOCATE SPACE FOR) ---*/
-    unsigned int packets_iterator = 0; // index pointing at the start of a read packet
-    unsigned int total_elements = 0; // bytes to allocate for completions
+    unsigned int packets_iterator = 0;  // index pointing at the start of a read packet
+    unsigned int total_elements = 0;    // bytes to allocate for completions
+
+    print_packet(packets);
 
     while (true) {
-        if (((packets[packets_iterator] >> 10) & 0x3FFFFF) != 0x0) { break; }
+        if (((packets[packets_iterator] >> 10) & 0x3FFFFF) != 0x0) {
+            break;
+        }
 
         unsigned int packet_address = packets[packets_iterator + 2];
         unsigned int packet_length = packets[packets_iterator] & 0x3FF;
         unsigned int boundary = (packet_address % 0x4000 + (packet_length - 1) * 4) / 0x4000;
-        total_elements +=  3 + packet_length + (3 * boundary);
+        total_elements += 3 + packet_length + (3 * boundary);
         packets_iterator += 3;
     }
 
     /* --- USE `TOTAL_ELEMENTS` TO ALLOCATE THE APPROPRIATE AMOUNT OF SPACE --- */
-    unsigned int *completions = malloc(total_elements * sizeof(unsigned int));
-    for (unsigned int i = 0; i < total_elements; i++) { completions[i] = 0; }
+    unsigned int *completions = malloc((total_elements * sizeof(unsigned int)) + 100);
+    for (unsigned int i = 0; i < total_elements; i++) {
+        completions[i] = 0;
+    }
 
     /* --- ITERATE THROUGH THE PACKETS IN `PACKETS[]` --- */
-    unsigned int r_start = 0; // index that point at the start of each read packet
-    unsigned int c_start = 0; // index that point at the start of each completion packet
+    unsigned int read_start = 0;              // index that point at the start of each read packet
+    unsigned int completion_start_index = 0;  // index that point at the start of each completion packet
 
     while (true) {
         /* --- IF THE PACKET IS NOT A READ TLP, BREAK --- */
-        if (((packets[r_start] >> 10) & 0x3FFFFF) != 0x0) { break; }
+        if (((packets[read_start] >> 10) & 0x3FFFFF) != 0x0) {
+            break;
+        }
         /* --- EXTRACT INFORMATION FROM THE CURRENT PACKET IN QUESTION --- */
-        unsigned int r_address = packets[r_start + 2];
-        unsigned int r_length = packets[r_start] & 0x3FF;
-        unsigned int requester_id = (packets[r_start + 1] >> 16) & 0xFFFF;
-        unsigned int tag = (packets[r_start + 1] >> 8) & 0xFF;
+        unsigned int read_address = packets[read_start + 2];
+        unsigned int read_length = packets[read_start] & 0x3FF;
+        unsigned int requester_id = (packets[read_start + 1] >> 16) & 0xFFFF;
+        unsigned int tag = (packets[read_start + 1] >> 8) & 0xFF;
         // unsigned int last_be = (packets[r_start + 1] >> 4) & 0xF;
         // unsigned int first_be = packets[r_start + 1] & 0xF;
 
         /* Generate variables for use in Completion packets */
-        unsigned int mem_address = r_address;
-        unsigned int c_length = 0; // need to change
-        unsigned int byte_count = r_length * 4;
-        unsigned int lower_address = mem_address & 0x7F;
-        unsigned int c_data_idx = c_start + 3;
-        printf("Initial State of the Variables:\n mem_address = Hex %x, c_length = Hex %x, byte_count = Hex %x, lower_address = Hex %x, c_data_idx = Hex %x\n", mem_address, c_length, byte_count, lower_address, c_data_idx);
+        unsigned int memory_address = read_address;
+        unsigned int completion_length = 0;
+        unsigned int byte_count = read_length * 4;
+        unsigned int lower_address = memory_address & 0x7F;
+        unsigned int completion_payload_index = completion_start_index + 3;
 
         /* --- FOR EACH INT, READ 4 DATA VALUES INTO IT --- */
-        for (unsigned int i = 0; i < r_length; i++) {
-            // printf("Start iteration %u of outer_loop\n", i);
+        for (unsigned int i = 0; i < read_length; i++) {
             for (int j = 0; j < 4; j++) {
-                // printf("Start iteration %u of inner_loop\n", j);
-                completions[c_data_idx] |= ((unsigned char)memory[mem_address]) << (j * 8);
-                printf("Value stored in completions: %d\n", completions[c_data_idx]);
-                mem_address++;
-                printf("Updated mem_address = %d\n", mem_address);
+                completions[completion_payload_index] |= ((unsigned char)memory[memory_address]) << (j * 8);
+                memory_address++;
             }
-            
-            c_length++; /* Incrememnt the length every time one data payload is done being read */
-            printf("Updated c_length = Hex %x\n", c_length);
-            c_data_idx++; /* The payload index that I'm looking at rn */
-            printf("Updated c_data_idx = Hex %x\n", c_data_idx);
 
-            if (mem_address % 0x4000 == 0) {
-                printf("mem_address = Hex %x, REACHED BOUNDARY\n", mem_address);
+            completion_length++;        /* Incrememnt the length every time one data payload is done being read */
+            completion_payload_index++; /* INncrement to the next payload index to enter the next 4 data values */
+
+            if (memory_address % 0x4000 == 0) {
                 /* --- MAKE A COMPLETION PACKET --- */
-                completions[c_start] |= 0x4A << 24;               /* Type */
-                // printf("Type: %u\n", (completions[c_start] >> 10) & 0x3FFFFF);
-                completions[c_start] |= c_length;                 /* Length */
-                // printf("Length: %u\n", completions[c_start] & 0x3FF);
-                completions[c_start + 2] |= (requester_id) << 16; /* Requestor ID */
-                // printf("Requester ID: %u\n", (completions[c_start + 2] >> 16) & 0xFFFF);
-                completions[c_start + 1] |= 0xDC << 16;           /* Completer ID */
-                // printf("Completer ID: %u\n", (completions[c_start + 1] >> 16) & 0xFFFF);
-                completions[c_start + 2] |= tag << 8;           /* Tag */
-                // printf("Tag: %u\n", (completions[c_start + 2] >> 8) & 0xFF);
-                completions[c_start + 1] |= byte_count;       /* Byte Count*/
-                // printf("Byte Count: %u\n", completions[c_start + 1] & 0xFFF);
-                completions[c_start + 2] |= lower_address;        /* Lower Address */
-                // printf("Lower Address: %u\n", completions[c_start + 2] & 0x7F);
-                
-                /* --- ASSIGN THE NEW C_START (START OF THE NEXT COMPLETION PACKET) --- */
-                c_start = c_data_idx;
-                /* Adjust some values for the second completion packet that will be created after this */
-                lower_address = mem_address & 0x7f;
-                byte_count -= (c_length * 4);
-                c_length = 0;
-            } 
-            // printf("End iteration %u of the outer loop\n", i);        
-        }
-        // printf("We are outside the loop because the boundary was not crossed\n");
-        /* --- MAKE A COMPLETION PACKET --- */
-        completions[c_start] |= 0x4A << 24;               /* Type */
-        completions[c_start] |= c_length;                 /* Length */
-        completions[c_start + 2] |= requester_id << 16; /* Requestor ID */
-        completions[c_start + 1] |= 0xdc << 16;           /* Completer ID */
-        completions[c_start + 2] |= tag << 8;           /* Tag */
-        completions[c_start + 1] |= byte_count;           /* Byte Count*/
-        completions[c_start + 2] |= lower_address;        /* Lower Address */
+                completions[completion_start_index] |= 0x4A << 24;             /* Type */
+                completions[completion_start_index] |= completion_length;      /* Length */
+                completions[completion_start_index + 2] |= requester_id << 16; /* Requestor ID */
+                completions[completion_start_index + 1] |= (unsigned int) 220 << 16;         /* Completer ID */
+                completions[completion_start_index + 2] |= tag << 8;           /* Tag */
+                completions[completion_start_index + 1] |= byte_count;         /* Byte Count*/
+                completions[completion_start_index + 2] |= lower_address;      /* Lower Address */
 
-        /* --- ASSIGN THE NEW C_START (START OF THE NEXT COMPLETION PACKET) --- */
-        c_start = c_data_idx;
+                printf("%u\n", completions[completion_start_index]);
+                printf("%u\n", completions[completion_start_index + 1]);
+                printf("%u\n", completions[completion_start_index + 2]);
+
+                /* CHANGE THE VALUES OF SOME VARIABLES FOR THE SECOND PACKET */
+                byte_count -= completion_length * 4;
+                lower_address = memory_address & 0x7F;
+                completion_length = 0;
+                completion_start_index = completion_payload_index;
+                completion_payload_index += 3;
+            }
+        }
+
+        /* --- MAKE A COMPLETION PACKET --- */
+        completions[completion_start_index] |= 0x4A << 24;             /* Type */
+        completions[completion_start_index] |= completion_length;      /* Length */
+        completions[completion_start_index + 2] |= requester_id << 16; /* Requestor ID */
+        completions[completion_start_index + 1] |= 0xDC << 16;         /* Completer ID */
+        completions[completion_start_index + 2] |= tag << 8;           /* Tag */
+        completions[completion_start_index + 1] |= byte_count;         /* Byte Count*/
+        completions[completion_start_index + 2] |= lower_address;      /* Lower Address */
+
+        printf("%u\n", completions[completion_start_index]);
+        printf("%u\n", completions[completion_start_index + 1]);
+        printf("%u\n", completions[completion_start_index + 2]);
+
+        /* --- ASSIGN THE NEW CCOMPLETION_START AND COMPLETION_PAYLOAD (START OF THE NEXT COMPLETION PACKET) --- */
+        completion_start_index = completion_payload_index;
+        completion_payload_index += 3;
         /* --- GO TO THE NEXT READ PACKET --- */
-        r_start += 3;
+        read_start += 3;
     }
     return completions;
 }
